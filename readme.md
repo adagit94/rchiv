@@ -1,0 +1,1 @@
+Single package monorepo comprised of reusable general purpose abstractions and utility functions.
