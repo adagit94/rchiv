@@ -31,14 +31,14 @@ impl WorkerPool {
             }
         }
 
-        let (s, r) = chan::<BoxedTask>();
-        let rec = Arc::new(Mutex::new(r));
+        let (queue, rcv) = chan::<BoxedTask>();
+        let atomic_rcv = Arc::new(Mutex::new(rcv));
 
         for _ in 0..workers_count {
-            Worker::new(rec.clone());
+            Worker::new(atomic_rcv.clone());
         }
 
-        return Self { queue: s };
+        return Self { queue };
     }
 
     fn box_task(&self, task: impl FnOnce() + Send + UnwindSafe + 'static) -> BoxedTask {
