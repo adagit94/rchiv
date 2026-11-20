@@ -1,5 +1,8 @@
-use std::{
-    pin::Pin, sync::{Arc, Mutex, mpsc::{Receiver, TryRecvError}}, thread::{self as th, JoinHandle},
+use core::{
+    array::from_fn,
+    future::PollFn,
+    pin::{Pin, pin},
+    task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
 
 use crate::workers::{tasks::BoxedAsyncTask, types::AtomicTaskReceiver};
@@ -10,60 +13,27 @@ const MAX_TASKS: usize = 256;
 
 // struct AsyncTask([Option<Pin<BoxedAsyncTask>>; MAX_TASKS]);
 
-pub(super) struct AsyncWorker {
-    rcv: AtomicTaskReceiver<BoxedAsyncTask>,
-    tasks: Vec<Option<Pin<BoxedAsyncTask>>>,
-    index: usize,
+struct AsyncTask {
+    waker: Waker,
 }
 
-// struct S(u8);
+#[macro_export]
+macro_rules! async_worker {
+    ($name: ident, $queue_size: literal$(, $visibility: vis)?) => {
+       $($visibility)? struct $name {
+        queue: [Option<AsyncTask>; $queue_size]
+       }
 
-impl AsyncWorker {
-    pub(super) fn new(rcv: AtomicTaskReceiver<BoxedAsyncTask>, q_cap: usize) -> JoinHandle<fn()> {
-        return th::spawn(move || {
-            let mut tasks = Vec::with_capacity(q_cap);
+       impl $name {
+        $($visibility)? fn new() -> Self {
+            Self {queue: from_fn::<Option<AsyncTask>, $queue_size, fn(usize) -> Option<AsyncTask>>(|_| None)}
+        }
+       }
+    };
+}
 
-            tasks.resize_with(q_cap, || None);
+async_worker!(W, 10, pub);
 
-            // loop {}
-
-            loop {
-                for task in tasks.into_iter() {
-                    match task {
-                        Some(fu) => {}
-                        None => {
-                            let lock_res = rcv.try_lock();
-
-                            match lock_res {
-                                Ok(rcv) => {
-                                    let fu_res = rcv.try_recv();
-
-                                    match fu_res {
-                                      Ok(fu) => {},
-                                      Err(err) => {
-                                        match err {
-                                          TryRecvError::Empty => {},
-                                          TryRecvError::Disconnected => {},
-                                        }
-                                      }
-                                    }
-                                  
-                                    drop(rcv);
-                                }
-                            }
-
-                            match t {
-                                Ok(t) => {
-                                    t();
-                                }
-                                Err(err) => {
-                                    println!("Receive of a task failed:\n{err}");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
+fn f() {
+    let w = W::new();
 }
